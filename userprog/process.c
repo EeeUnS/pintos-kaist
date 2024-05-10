@@ -22,6 +22,13 @@
 #include "vm/vm.h"
 #endif
 
+static bool is_8byte_align(void *ptr){	
+	return !((uint64_t)ptr & 0x7);
+}
+
+static bool is_16byte_align(void *ptr){	
+	return !((uint64_t)ptr & 0xF);
+}
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -32,6 +39,7 @@ static void
 process_init (void) {
 	struct thread *current = thread_current ();
 }
+
 
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
  * The new thread may be scheduled (and may even exit)
@@ -204,6 +212,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	 while (true)
+	 	;
 	return -1;
 }
 
@@ -320,6 +330,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+
+ #define MAX_ARGS 16
 static bool
 load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
@@ -335,12 +347,45 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	
+	printf("arg %s\n", file_name);
+
+	char *p_argv[MAX_ARGS + 1];
+	int argc = 0; 	
+	int filename_len = strlen(file_name) + 1;
+	hex_dump(0, (void *) file_name, filename_len, true);
+	{
+		//Implement argument passing
+		char *p_token = NULL;
+		char *p_save = NULL;
+		p_token = strtok_r ((char *)file_name, " ", &p_save); 
+		while (p_token != NULL){
+			if (argc > MAX_ARGS){
+				ASSERT(false);
+				success = false;
+				goto done;
+			}
+			printf("token %s\n", p_token);
+			p_argv[argc] = p_token;
+			p_token = strtok_r (NULL, " ", &p_save);
+			++argc;
+		}
+		p_argv[argc] = NULL;
+		ASSERT (argc > 0);
+	}
+
+	ASSERT(p_argv[0] == file_name);
+
+	hex_dump(0, (void *) file_name, filename_len, true);
+
 	/* Open executable file. */
 	file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+
+	printf ("load: %s: open Success\n", file_name);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -416,6 +461,84 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	{
+		uint64_t start = if_->rsp;
+		if_->rsp -= filename_len;
+		memcpy((void *)(if_->rsp), file_name, filename_len);
+
+		hex_dump(0, (void *) if_ -> rsp, start - if_->rsp, true);
+
+		{
+			ASSERT(p_argv[0] == file_name);
+			char *argv = if_->rsp;
+
+			char *p_argument = file_name;
+			ASSERT ( p_argv[0] == p_argument);
+			for(int i = 0 ; i < argc; ++i){
+				ASSERT(p_argv[i] != NULL);
+				ASSERT (p_argv[i] <= file_name + filename_len);
+				ASSERT ( p_argv[i] >= file_name);
+
+				char * offset = p_argv[i] - p_argument;
+				ASSERT (offset >= 0 && offset <= filename_len);
+				
+				p_argv[i] = (uintptr_t)argv + offset;
+
+				//printf("token %x %x %x %x\n", p_argv[i], start, argv, offset);
+				ASSERT (p_argv[0] == argv);
+				ASSERT (p_argv[i] < start);
+
+			}
+		}
+
+		if_->rsp = if_->rsp & (~0x7);
+		ASSERT (is_8byte_align(if_->rsp));
+
+		const int argvSize = (argc + 1) * sizeof(char *);
+		if_->rsp -= argvSize;
+		
+		printf(" %x %x %x %x\n", p_argv, p_argv[0], start, if_->rsp);
+
+		ASSERT (p_argv[0] > if_->rsp);
+
+		memcpy((void *)if_->rsp, p_argv, argvSize);
+
+		hex_dump(0, (void *)if_ -> rsp, start - if_->rsp, true);
+
+		if_->R.rsi = if_->rsp; // argv
+		if_->R.rdi = argc;
+
+		ASSERT (is_8byte_align(if_->rsp));
+
+		// RSP is 16 byte align		
+		if (is_16byte_align(if_->rsp)){
+			if_->rsp -= 16;
+		}
+		else{
+			if_->rsp -= 8;
+		}
+
+		//return address
+		*(uintptr_t *)(if_->rsp) = NULL;
+		ASSERT (is_16byte_align(if_->rsp));
+
+		hex_dump(0, (void *) if_ -> rsp, start - if_->rsp, true);
+		/*
+		Address	Name	Data	Type
+		0x4747fffc	argv[3][...]	'bar\0'	char[4]
+		0x4747fff8	argv[2][...]	'foo\0'	char[4]
+		0x4747fff5	argv[1][...]	'-l\0'	char[3]
+		0x4747ffed	argv[0][...]	'/bin/ls\0'	char[8]
+		0x4747ffe8	word-align	0	uint8_t[]
+		0x4747ffe0	argv[4]	0	char *
+		0x4747ffd8	argv[3]	0x4747fffc	char *
+		0x4747ffd0	argv[2]	0x4747fff8	char *
+		0x4747ffc8	argv[1]	0x4747fff5	char *
+		0x4747ffc0	argv[0]	0x4747ffed	char *
+		0x4747ffb8	return address	0	void (*) ()
+		*/
+	}
+
 
 	success = true;
 
