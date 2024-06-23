@@ -97,7 +97,9 @@ struct thread {
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
+	int exit_status;
 	uint64_t *pml4;                     /* Page map level 4 */
+	int child_exit_status;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -140,6 +142,8 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+void thread_set_exit_status(int status);
 
 void do_iret (struct intr_frame *tf);
 

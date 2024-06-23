@@ -47,7 +47,7 @@ process_init (void) {
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
-process_create_initd (const char *file_name) {
+process_create_initd (const char *file_name) {  
 	char *fn_copy;
 	tid_t tid;
 
@@ -80,7 +80,9 @@ initd (void *f_name) {
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
- * TID_ERROR if the thread cannot be created. */
+ * TID_ERROR if the thread cannot be created. 
+ 
+ */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
@@ -212,20 +214,44 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	 while (true)
-	 	;
-	return -1;
+	// 실제 tid인지, child tid인지 체크해서 아니면 즉시 반환
+	struct thread *child_tid = NULL;
+	struct thread *curr_thread = thread_current();
+/*
+1. 실제 child 인지 확인필요.
+2. 호출시 해당 thread block
+3. child exit시에 부모가 wait시 꺠워야함.
+*/
+
+	
+	child_tid = get_child_thread(child_tid);
+	if (child_tid == NULL){
+		return -1;
+	}
+	
+	int status = wait_function_with_block (child_tid) ;
+	thread_block();
+	int status = curr_thread->
+	//thread_get_exit_status(child_tid);
+	return status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void
-process_exit (void) {
-	struct thread *curr = thread_current ();
+process_exit () {
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	 * TODO: We recommend you to implement process resource cleanup here. 
+	 * 
+	 * The name printed should be the full name passed to process_execute(), omitting command-line arguments.
+	 * */
+#ifdef USERPROG
+	struct thread *curr = thread_current ();
+	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
+#endif
+	struct thread* parents_t;
+	thread_unblock(parents_t);
 	process_cleanup ();
 }
 

@@ -4,12 +4,25 @@
 .globl syscall_entry
 .type syscall_entry, @function
 syscall_entry:
+
+/*			"mov %1, %%rax\n"
+			"mov %2, %%rdi\n"
+			"mov %3, %%rsi\n"
+			"mov %4, %%rdx\n"
+			"mov %5, %%r10\n"
+			"mov %6, %%r8\n"
+			"mov %7, %%r9\n"
+			"syscall\n"
+			: "=a" (ret)
+			: "g" (num), "g" (a1), "g" (a2), "g" (a3), "g" (a4), "g" (a5), "g" (a6)
+			: "cc", "memory");
+*/
 	movq %rbx, temp1(%rip)
 	movq %r12, temp2(%rip)     /* callee saved registers */
 	movq %rsp, %rbx            /* Store userland rsp    */
-	movabs $tss, %r12
-	movq (%r12), %r12
-	movq 4(%r12), %rsp         /* Read ring0 rsp from the tss */
+	movabs $tss, %r12 
+	movq (%r12), %r12  			/*rse1 */ 
+	movq 4(%r12), %rsp         /* Read ring0 rsp from the tss rsp0 */
 	/* Now we are in the kernel stack */
 	push $(SEL_UDSEG)      /* if->ss */
 	push %rbx              /* if->rsp */

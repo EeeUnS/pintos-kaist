@@ -158,3 +158,33 @@ page_fault (struct intr_frame *f) {
 	kill (f);
 }
 
+/* Reads a byte at user virtual address UADDR.
+UADDR must be below PHYS_BASE.
+Returns the byte value if successful, -1 if a sefault
+occurred.
+*/
+
+static int 
+get_user (const uint8_t *uaddr)
+{
+	int result;
+	asm ("movl $lf, %0; movzbl %1, %0; 1:"
+		: "=&a" (result), "=m" (*uaddr));
+	return result;
+}
+
+/*
+Writes BYTE to user addres UDST.
+UDST must be below PHYS_BASE.
+Returns true if successful, false if a segfault occurred.
+*/
+
+static int 
+put_user (uint8_t *udst, uint8_t byte)
+{
+	int error_code;
+	asm ("movl $lf, %0; movb %b2, %1; 1:"
+		: "=&a" (error_code), "=m" (*udst) : "q" (byte));
+	return error_code != -1;
+}
+

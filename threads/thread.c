@@ -588,3 +588,11 @@ allocate_tid (void) {
 
 	return tid;
 }
+
+
+void thread_set_exit_status(int status){
+#ifdef USERPROG
+	struct thread* curr = thread_current();
+	curr->exit_status = status;
+#endif
+}
